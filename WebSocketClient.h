@@ -91,6 +91,7 @@ public:
     
     // Get data off of the stream
     bool getData(String& data, uint8_t *opcode = NULL);
+    bool getData(char* data, uint8_t *opcode, int& dataSize);
 
     // Write data to the stream
     void sendData(const char *str, uint8_t opcode = WS_OPCODE_TEXT);
@@ -110,7 +111,8 @@ private:
     // websocket connection.
     bool analyzeRequest();
 
-    bool handleStream(String& data, uint8_t *opcode);    
+    bool handleStream(String& data, uint8_t *opcode);
+    bool handleStream(char* data, uint8_t *opcode, int& dataSize);
     
     // Disconnect user gracefully.
     void disconnectStream();

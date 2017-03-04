@@ -242,6 +242,110 @@ bool WebSocketClient::handleStream(String& data, uint8_t *opcode) {
     return true;
 }
 
+bool WebSocketClient::handleStream(char* data, uint8_t *opcode, int& dataSize) {
+    uint8_t msgtype;
+    uint8_t bite;
+    unsigned int length;
+    uint8_t mask[4];
+    uint8_t index;
+    unsigned int i;
+    bool hasMask = false;
+
+    if (!socket_client->connected() || !socket_client->available())
+    {
+        return false;
+    }
+
+    msgtype = timedRead();
+    if (!socket_client->connected()) {
+        return false;
+    }
+
+    length = timedRead();
+
+    if (length & WS_MASK) {
+        hasMask = true;
+        length = length & ~WS_MASK;
+    }
+
+
+    if (!socket_client->connected()) {
+        return false;
+    }
+
+    index = 6;
+
+    if (length == WS_SIZE16) {
+        length = timedRead() << 8;
+        if (!socket_client->connected()) {
+            return false;
+        }
+
+        length |= timedRead();
+        if (!socket_client->connected()) {
+            return false;
+        }
+
+    } else if (length == WS_SIZE64) {
+#ifdef DEBUGGING
+        Serial.println(F("No support for over 16 bit sized messages"));
+#endif
+        return false;
+    }
+
+    if (hasMask) {
+        // get the mask
+        mask[0] = timedRead();
+        if (!socket_client->connected()) {
+            return false;
+        }
+
+        mask[1] = timedRead();
+        if (!socket_client->connected()) {
+
+            return false;
+        }
+
+        mask[2] = timedRead();
+        if (!socket_client->connected()) {
+            return false;
+        }
+
+        mask[3] = timedRead();
+        if (!socket_client->connected()) {
+            return false;
+        }
+    }
+
+    strcpy(data, "");
+
+    if (opcode != NULL)
+    {
+      *opcode = msgtype & ~WS_FIN;
+    }
+
+
+    dataSize = length;
+
+    if (hasMask) {
+        for (i=0; i<length; ++i) {
+            sprintf(data + i, "%c", (char) (timedRead() ^ mask[i % 4]));
+            if (!socket_client->connected()) {
+                return false;
+            }
+        }
+    } else {
+        for (i=0; i<length; ++i) {
+            sprintf(data + i, "%c", (char) timedRead());
+            if (!socket_client->connected()) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 void WebSocketClient::disconnectStream() {
 #ifdef DEBUGGING
     Serial.println(F("Terminating socket"));
@@ -258,6 +362,10 @@ void WebSocketClient::disconnectStream() {
 bool WebSocketClient::getData(String& data, uint8_t *opcode) {
     return handleStream(data, opcode);
 }    
+
+bool WebSocketClient::getData(char* data, uint8_t *opcode, int& dataSize) {
+    return handleStream(data, opcode, dataSize);
+}
 
 void WebSocketClient::sendData(const char *str, uint8_t opcode) {
 #ifdef DEBUGGING
