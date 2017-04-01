@@ -67,6 +67,7 @@ bool WebSocketServer::analyzeRequest(int bufferLength) {
     }
 
     // TODO: More robust string extraction
+    int it_test = 0;
     while ((bite = socket_client->read()) != -1) {
 
         temp += (char)bite;
@@ -115,6 +116,11 @@ bool WebSocketServer::analyzeRequest(int bufferLength) {
         if (!socket_client->available()) {
           delay(20);
         }
+        
+        it_test++;
+        
+        if(it_test%500 == 0)
+        {  Serial.printf("AnalyzeRequest: %u iterations\n", it_test); }
     }
 
     if (!socket_client->connected()) {
@@ -451,8 +457,14 @@ void WebSocketServer::sendData(String str) {
 }
 
 int WebSocketServer::timedRead() {
+  int it_test = 0;
   while (!socket_client->available()) {
     delay(20);  
+
+    it_test++;
+    
+    if(it_test%500 == 0)
+    {  Serial.printf("AnalyzeRequest: %u iterations\n", it_test); }
   }
 
   return socket_client->read();

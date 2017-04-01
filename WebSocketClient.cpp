@@ -42,15 +42,23 @@ bool WebSocketClient::handshake(Client &client) {
 
 bool WebSocketClient::analyzeRequest() {
     String temp;
-
+    temp.reserve(52);
+    
     int bite;
     bool foundupgrade = false;
     unsigned long intkey[2];
+    
     String serverKey;
+    serverKey.reserve(28);
+    
     char keyStart[17];
     char b64Key[25];
-    String key = "------------------------";
-
+    String key;
+    key.reserve(60);
+    key = F("------------------------");
+    
+    
+    
     randomSeed(analogRead(0));
 
     for (int i=0; i<16; ++i) {
@@ -90,9 +98,10 @@ bool WebSocketClient::analyzeRequest() {
 
     while (socket_client->connected() && !socket_client->available()) {
         delay(100);
-        Serial.println("Waiting...");
+        Serial.println(F("Waiting..."));
     }
 
+    int it_test = 0;
     // TODO: More robust string extraction
     while ((bite = socket_client->read()) != -1) {
 
@@ -100,22 +109,37 @@ bool WebSocketClient::analyzeRequest() {
 
         if ((char)bite == '\n') {
 #ifdef DEBUGGING
-            Serial.print("Got Header: " + temp);
+            Serial.print(F("Got Header: ") + temp);
 #endif
-            if (!foundupgrade && temp.startsWith("Upgrade: websocket")) {
+
+            Serial.print(F("String -temp- size ")); Serial.println(temp.length());
+            if (!foundupgrade && temp.startsWith(F("Upgrade: websocket"))) {
                 foundupgrade = true;
-            } else if (temp.startsWith("Sec-WebSocket-Accept: ")) {
+            } else if (temp.startsWith(F("Sec-WebSocket-Accept: "))) {
                 serverKey = temp.substring(22,temp.length() - 2); // Don't save last CR+LF
             }
-            temp = "";		
+            temp = F("");		
         }
 
         if (!socket_client->available()) {
           delay(20);
         }
+        
+        it_test++;
+        
+        if(it_test%500 == 0)
+        {  Serial.print(F("AnalyzeRequest: ")); Serial.print(it_test); Serial.println(F(" iterations\n"));}
     }
+    
+    
+    key += F("258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+    
+    Serial.print(F("String -temp- size ")); Serial.println(temp.length());
+    Serial.print(F("String -serverKey- size"));Serial.println(serverKey.length());
+    Serial.print(F("String -key- size ")); Serial.println( key.length());
 
-    key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    
+    
     uint8_t *hash;
     char result[21];
     char b64Result[30];
@@ -138,108 +162,6 @@ bool WebSocketClient::analyzeRequest() {
 
     // if the keys match, good to go
     return serverKey.equals(String(b64Result));
-}
-
-
-bool WebSocketClient::handleStream(String& data, uint8_t *opcode) {
-    uint8_t msgtype;
-    uint8_t bite;
-    unsigned int length;
-    uint8_t mask[4];
-    uint8_t index;
-    unsigned int i;
-    bool hasMask = false;
-
-    if (!socket_client->connected() || !socket_client->available())
-    {
-        return false;
-    }      
-
-    msgtype = timedRead();
-    if (!socket_client->connected()) {
-        return false;
-    }
-
-    length = timedRead();
-
-    if (length & WS_MASK) {
-        hasMask = true;
-        length = length & ~WS_MASK;
-    }
-
-
-    if (!socket_client->connected()) {
-        return false;
-    }
-
-    index = 6;
-
-    if (length == WS_SIZE16) {
-        length = timedRead() << 8;
-        if (!socket_client->connected()) {
-            return false;
-        }
-            
-        length |= timedRead();
-        if (!socket_client->connected()) {
-            return false;
-        }   
-
-    } else if (length == WS_SIZE64) {
-#ifdef DEBUGGING
-        Serial.println(F("No support for over 16 bit sized messages"));
-#endif
-        return false;
-    }
-
-    if (hasMask) {
-        // get the mask
-        mask[0] = timedRead();
-        if (!socket_client->connected()) {
-            return false;
-        }
-
-        mask[1] = timedRead();
-        if (!socket_client->connected()) {
-
-            return false;
-        }
-
-        mask[2] = timedRead();
-        if (!socket_client->connected()) {
-            return false;
-        }
-
-        mask[3] = timedRead();
-        if (!socket_client->connected()) {
-            return false;
-        }
-    }
-        
-    data = "";
-        
-    if (opcode != NULL)
-    {
-      *opcode = msgtype & ~WS_FIN;
-    }
-                
-    if (hasMask) {
-        for (i=0; i<length; ++i) {
-            data += (char) (timedRead() ^ mask[i % 4]);
-            if (!socket_client->connected()) {
-                return false;
-            }
-        }
-    } else {
-        for (i=0; i<length; ++i) {
-            data += (char) timedRead();
-            if (!socket_client->connected()) {
-                return false;
-            }
-        }            
-    }
-    
-    return true;
 }
 
 bool WebSocketClient::handleStream(char* data, uint8_t *opcode, int& dataSize) {
@@ -359,9 +281,6 @@ void WebSocketClient::disconnectStream() {
     socket_client->stop();
 }
 
-bool WebSocketClient::getData(String& data, uint8_t *opcode) {
-    return handleStream(data, opcode);
-}    
 
 bool WebSocketClient::getData(char* data, uint8_t *opcode, int& dataSize) {
     return handleStream(data, opcode, dataSize);
@@ -377,25 +296,21 @@ void WebSocketClient::sendData(const char *str, uint8_t opcode) {
     }
 }
 
-void WebSocketClient::sendData(String str, uint8_t opcode) {
-#ifdef DEBUGGING
-    Serial.print(F("Sending data: "));
-    Serial.println(str);
-#endif
-    if (socket_client->connected()) {
-        sendEncodedData(str, opcode);
-    }
-}
 
 int WebSocketClient::timedRead() {
+  int it_test = 0;
   while (!socket_client->available()) {
     delay(20);  
+    it_test++;
+    
+    if(it_test%500 == 0)
+    {  Serial.printf("AnalyzeRequest: %u iterations\n", it_test); }
   }
 
   return socket_client->read();
 }
 
-void WebSocketClient::sendEncodedData(char *str, uint8_t opcode) {
+void WebSocketClient::sendEncodedData(const char *str, uint8_t opcode) {
     uint8_t mask[4];
     int size = strlen(str);
 
@@ -426,11 +341,3 @@ void WebSocketClient::sendEncodedData(char *str, uint8_t opcode) {
     }
 }
 
-void WebSocketClient::sendEncodedData(String str, uint8_t opcode) {
-    int size = str.length() + 1;
-    char cstr[size];
-
-    str.toCharArray(cstr, size);
-
-    sendEncodedData(cstr, opcode);
-}
